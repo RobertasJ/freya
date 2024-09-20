@@ -1,32 +1,14 @@
 use std::time::Duration;
 
-use dioxus_core::prelude::{
-    spawn,
-    use_hook,
-    Task,
-};
-use dioxus_hooks::{
-    use_memo,
-    use_reactive,
-    use_signal,
-    Dependency,
-};
-use dioxus_signals::{
-    Memo,
-    ReadOnlySignal,
-    Readable,
-    Signal,
-    Writable,
-};
+use dioxus_core::prelude::{spawn, use_hook, Task};
+use dioxus_hooks::{use_memo, use_reactive, use_signal, Dependency};
+use dioxus_signals::{Memo, ReadOnlySignal, Readable, Signal, Writable};
 use easer::functions::*;
 use freya_engine::prelude::Color;
 use freya_node_state::Parse;
 use tokio::time::Instant;
 
-use crate::{
-    use_platform,
-    UsePlatform,
-};
+use crate::{use_platform, UsePlatform};
 
 pub fn apply_value(
     origin: f32,
@@ -117,6 +99,129 @@ pub enum Ease {
     In,
     Out,
     InOut,
+}
+
+pub struct SegmentCompositor {
+    segments: Vec<Segment>,
+    total_duration: f32,
+    current_value: f32,
+}
+
+type EasingFunction = fn(f32, f32, f32, f32) -> f32;
+
+struct Segment {
+    start: f32,
+    end: f32,
+    duration: f32,
+    function: EasingFunction,
+}
+
+impl SegmentCompositor {
+    pub fn new(start: f32, end: f32, duration: f32, function: EasingFunction) -> Self {
+        let segment = Segment {
+            start,
+            end,
+            duration,
+            function,
+        };
+
+        Self {
+            segments: vec![segment],
+            total_duration: duration,
+            current_value: start,
+        }
+    }
+
+    pub fn add_segment(
+        mut self,
+        start: f32,
+        end: f32,
+        duration: f32,
+        function: EasingFunction,
+    ) -> Self {
+        let segment = Segment {
+            start,
+            end,
+            duration,
+            function,
+        };
+
+        self.total_duration += duration;
+        self.segments.push(segment);
+        self
+    }
+
+    pub fn add_constant_segment(mut self, value: f32, duration: f32) -> Self {
+        let segment = Segment {
+            start: value,
+            end: value,
+            duration,
+            function: |_time: f32, start: f32, _end: f32, _duration: f32| start,
+        };
+
+        self.total_duration += duration;
+        self.segments.push(segment);
+        self
+    }
+
+    pub fn apply(&mut self, time: f32) -> f32 {
+        let mut accumulated_time = 0.0;
+
+        for segment in &self.segments {
+            if time > accumulated_time && time <= accumulated_time + segment.duration {
+                let relative_time = time - accumulated_time;
+                self.current_value = (segment.function)(
+                    relative_time,
+                    segment.start,
+                    segment.end - segment.start,
+                    segment.duration,
+                );
+                break;
+            }
+
+            accumulated_time += segment.duration;
+        }
+
+        self.current_value
+    }
+}
+
+impl AnimatedValue for SegmentCompositor {
+    fn time(&self) -> Duration {
+        Duration::from_millis(self.total_duration as u64)
+    }
+
+    fn as_f32(&self) -> f32 {
+        self.current_value
+    }
+
+    fn prepare(&mut self, direction: AnimDirection) {
+        match direction {
+            AnimDirection::Forward => self.current_value = self.apply(0.),
+            AnimDirection::Reverse => self.current_value = self.apply(self.total_duration),
+        }
+    }
+
+    fn advance(&mut self, index: i32, direction: AnimDirection) {
+        let mut index = index as f32;
+        match direction {
+            AnimDirection::Forward => {}
+            AnimDirection::Reverse => index = self.total_duration - index,
+        }
+        self.apply(index);
+    }
+
+    fn as_string(&self) -> String {
+        panic!("not a string");
+    }
+
+    fn is_finished(&self, index: i32, direction: AnimDirection) -> bool {
+        let index = index as f32;
+        match direction {
+            AnimDirection::Forward => index >= self.total_duration,
+            AnimDirection::Reverse => index <= 0.,
+        }
+    }
 }
 
 /// Animate a color.
