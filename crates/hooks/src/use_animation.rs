@@ -1,32 +1,14 @@
 use std::time::Duration;
 
-use dioxus_core::prelude::{
-    spawn,
-    use_hook,
-    Task,
-};
-use dioxus_hooks::{
-    use_memo,
-    use_reactive,
-    use_signal,
-    Dependency,
-};
-use dioxus_signals::{
-    Memo,
-    ReadOnlySignal,
-    Readable,
-    Signal,
-    Writable,
-};
+use dioxus_core::prelude::{spawn, use_hook, Task};
+use dioxus_hooks::{use_memo, use_reactive, use_signal, Dependency};
+use dioxus_signals::{Memo, ReadOnlySignal, Readable, Signal, Writable};
 use easer::functions::*;
 use freya_engine::prelude::Color;
 use freya_node_state::Parse;
 use tokio::time::Instant;
 
-use crate::{
-    use_platform,
-    UsePlatform,
-};
+use crate::{use_platform, UsePlatform};
 
 pub fn apply_value(
     origin: f32,
@@ -234,11 +216,8 @@ impl AnimatedValue for SegmentCompositor {
     }
 
     fn is_finished(&self, index: i32, direction: AnimDirection) -> bool {
-        let index = index as f32;
-        match direction {
-            AnimDirection::Forward => index >= self.total_duration,
-            AnimDirection::Reverse => index <= 0.,
-        }
+        let mut index = index as f32;
+        index >= self.total_duration
     }
 }
 
