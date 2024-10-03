@@ -1,13 +1,6 @@
 use dioxus::prelude::*;
 use freya_elements::elements as dioxus_elements;
-use freya_hooks::{
-    use_animation,
-    use_applied_theme,
-    AnimNum,
-    LoaderTheme,
-    LoaderThemeWith,
-    OnFinish,
-};
+use freya_hooks::{use_animation, use_applied_theme, LoaderTheme, LoaderThemeWith};
 
 /// Properties for the [`Loader`] component.
 #[derive(Props, Clone, PartialEq)]
@@ -31,17 +24,19 @@ pub fn Loader(props: LoaderProps) -> Element {
 
     let degrees = anim.get().read().as_f32();
 
-    rsx!(svg {
-        rotate: "{degrees}deg",
-        width: "48",
-        height: "48",
-        svg_content: r#"
+    rsx!(
+        svg {
+            rotate: "{degrees}deg",
+            width: "48",
+            height: "48",
+            svg_content: r#"
             <svg viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
                 <circle class="spin" cx="300" cy="300" fill="none"
                 r="250" stroke-width="64" stroke="{primary_color}"
                 stroke-dasharray="256 1400"
                 stroke-linecap="round" />
             </svg>
-        "#
-    })
+        "#,
+        }
+    )
 }

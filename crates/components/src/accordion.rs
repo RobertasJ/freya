@@ -1,17 +1,7 @@
 use dioxus::prelude::*;
-use freya_elements::{
-    elements as dioxus_elements,
-    events::MouseEvent,
-};
+use freya_elements::{elements as dioxus_elements, events::MouseEvent};
 use freya_hooks::{
-    use_animation,
-    use_applied_theme,
-    use_platform,
-    AccordionTheme,
-    AccordionThemeWith,
-    AnimNum,
-    Ease,
-    Function,
+    use_animation, use_applied_theme, use_platform, AccordionTheme, AccordionThemeWith,
 };
 use winit::window::CursorIcon;
 
@@ -122,7 +112,9 @@ pub struct AccordionSummaryProps {
 /// Intended to use as summary for an [`Accordion`].
 #[allow(non_snake_case)]
 pub fn AccordionSummary(props: AccordionSummaryProps) -> Element {
-    rsx!({ props.children })
+    rsx!(
+        {props.children}
+    )
 }
 
 /// Properties for the [`AccordionBody`] component.
@@ -135,11 +127,9 @@ pub struct AccordionBodyProps {
 /// Intended to wrap the body of an [`Accordion`].
 #[allow(non_snake_case)]
 pub fn AccordionBody(props: AccordionBodyProps) -> Element {
-    rsx!(rect {
-        width: "100%",
-        padding: "15 0 0 0",
-        {props.children}
-    })
+    rsx!(
+        rect { width: "100%", padding: "15 0 0 0", {props.children} }
+    )
 }
 
 #[cfg(test)]
@@ -155,15 +145,13 @@ mod test {
         fn accordion_app() -> Element {
             rsx!(
                 Accordion {
-                    summary: rsx!(AccordionSummary {
-                        label {
-                            "Accordion Summary"
+                    summary: rsx! {
+                        AccordionSummary {
+                            label { "Accordion Summary" }
                         }
-                    }),
+                    },
                     AccordionBody {
-                        label {
-                            "Accordion Body"
-                        }
+                        label { "Accordion Body" }
                     }
                 }
             )
