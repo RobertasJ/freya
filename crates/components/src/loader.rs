@@ -1,6 +1,8 @@
 use dioxus::prelude::*;
 use freya_elements::elements as dioxus_elements;
-use freya_hooks::{use_animation, use_applied_theme, LoaderTheme, LoaderThemeWith};
+use freya_hooks::{
+    use_animation, use_applied_theme, AnimNum, LoaderTheme, LoaderThemeWith, OnFinish,
+};
 
 /// Properties for the [`Loader`] component.
 #[derive(Props, Clone, PartialEq)]

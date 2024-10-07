@@ -1,435 +1,720 @@
-use std::{process::Output, time::Duration};
+use std::time::Duration;
 
 use dioxus_core::prelude::{spawn, use_hook, Task};
 use dioxus_hooks::{use_memo, use_reactive, use_signal, Dependency};
 use dioxus_signals::{Memo, ReadOnlySignal, Readable, Signal, Writable};
 use easer::functions::*;
-use freya_engine::prelude::{Color, HSV};
+use freya_engine::prelude::Color;
 use freya_node_state::Parse;
 use tokio::time::Instant;
 
 use crate::{use_platform, UsePlatform};
-/// ```
-/// fn(time: f32, start: f32, end: f32, duration: f32) -> f32;
-/// ```
-type EasingFunction = fn(f32, f32, f32, f32) -> f32;
-pub trait Easable {
-    type Output;
-    fn ease(&self, to: &Self, time: u32, duration: u32, function: EasingFunction) -> Self::Output;
-}
 
-impl Easable for f32 {
-    type Output = Self;
-    fn ease(&self, to: &Self, time: u32, duration: u32, function: EasingFunction) -> Self::Output {
-        function(time as f32, *self, *to - *self, duration as f32)
+pub fn apply_value(
+    origin: f32,
+    destination: f32,
+    index: i32,
+    time: Duration,
+    ease: Ease,
+    function: Function,
+) -> f32 {
+    let (t, b, c, d) = (
+        index as f32,
+        origin,
+        destination - origin,
+        time.as_millis() as f32,
+    );
+    match function {
+        Function::Back => match ease {
+            Ease::In => Back::ease_in(t, b, c, d),
+            Ease::InOut => Back::ease_in_out(t, b, c, d),
+            Ease::Out => Back::ease_out(t, b, c, d),
+        },
+        Function::Bounce => match ease {
+            Ease::In => Bounce::ease_in(t, b, c, d),
+            Ease::InOut => Bounce::ease_in_out(t, b, c, d),
+            Ease::Out => Bounce::ease_out(t, b, c, d),
+        },
+        Function::Circ => match ease {
+            Ease::In => Circ::ease_in(t, b, c, d),
+            Ease::InOut => Circ::ease_in_out(t, b, c, d),
+            Ease::Out => Circ::ease_out(t, b, c, d),
+        },
+        Function::Cubic => match ease {
+            Ease::In => Cubic::ease_in(t, b, c, d),
+            Ease::InOut => Cubic::ease_in_out(t, b, c, d),
+            Ease::Out => Cubic::ease_out(t, b, c, d),
+        },
+        Function::Elastic => match ease {
+            Ease::In => Elastic::ease_in(t, b, c, d),
+            Ease::InOut => Elastic::ease_in_out(t, b, c, d),
+            Ease::Out => Elastic::ease_out(t, b, c, d),
+        },
+        Function::Expo => match ease {
+            Ease::In => Expo::ease_in(t, b, c, d),
+            Ease::InOut => Expo::ease_in_out(t, b, c, d),
+            Ease::Out => Expo::ease_out(t, b, c, d),
+        },
+        Function::Linear => match ease {
+            Ease::In => Linear::ease_in(t, b, c, d),
+            Ease::InOut => Linear::ease_in_out(t, b, c, d),
+            Ease::Out => Linear::ease_out(t, b, c, d),
+        },
+        Function::Quad => match ease {
+            Ease::In => Quad::ease_in(t, b, c, d),
+            Ease::InOut => Quad::ease_in_out(t, b, c, d),
+            Ease::Out => Quad::ease_out(t, b, c, d),
+        },
+        Function::Quart => match ease {
+            Ease::In => Quart::ease_in(t, b, c, d),
+            Ease::InOut => Quart::ease_in_out(t, b, c, d),
+            Ease::Out => Quart::ease_out(t, b, c, d),
+        },
+        Function::Sine => match ease {
+            Ease::In => Sine::ease_in(t, b, c, d),
+            Ease::InOut => Sine::ease_in_out(t, b, c, d),
+            Ease::Out => Sine::ease_out(t, b, c, d),
+        },
     }
 }
 
-impl Easable for Color {
-    type Output = Self;
-    fn ease(&self, to: &Self, time: u32, duration: u32, function: EasingFunction) -> Self::Output {
-        let hsv1 = self.to_hsv();
-        let hsv2 = to.to_hsv();
+#[derive(Default, Clone, Copy)]
+pub enum Function {
+    Back,
+    Bounce,
+    Circ,
+    Cubic,
+    Elastic,
+    Expo,
+    #[default]
+    Linear,
+    Quad,
+    Quart,
+    Sine,
+}
 
-        let h = function(time as f32, hsv1.h, hsv2.h - hsv1.h, duration as f32);
-        let s = function(time as f32, hsv1.s, hsv2.s - hsv1.s, duration as f32);
-        let v = function(time as f32, hsv1.v, hsv2.v - hsv1.v, duration as f32);
+#[derive(Default, Clone, Copy)]
+pub enum Ease {
+    #[default]
+    In,
+    Out,
+    InOut,
+}
 
-        let eased = HSV { h, s, v };
-        let color = eased.to_color(1);
+/// Animate a color.
+pub struct AnimColor {
+    origin: Color,
+    destination: Color,
+    time: Duration,
+    ease: Ease,
+    function: Function,
 
-        color
+    value: Color,
+}
+
+impl AnimColor {
+    pub fn new(origin: &str, destination: &str) -> Self {
+        Self {
+            origin: Color::parse(origin).unwrap(),
+            destination: Color::parse(destination).unwrap(),
+            time: Duration::default(),
+            ease: Ease::default(),
+            function: Function::default(),
+
+            value: Color::parse(origin).unwrap(),
+        }
+    }
+
+    /// Set the animation duration using milliseconds. Use `Self::duration` if you want to specify the duration in another form.
+    pub fn time(mut self, time: u64) -> Self {
+        self.time = Duration::from_millis(time);
+        self
+    }
+
+    /// Set the animation duration using milliseconds.
+    pub fn duration(mut self, duration: Duration) -> Self {
+        self.time = duration;
+        self
+    }
+
+    /// Set the easing type. See `Ease` for all the types.
+    pub fn ease(mut self, ease: Ease) -> Self {
+        self.ease = ease;
+        self
+    }
+
+    /// Set the easing function. See `Function` for all the types.
+    pub fn function(mut self, function: Function) -> Self {
+        self.function = function;
+        self
     }
 }
 
-impl Easable for &str {
-    type Output = String;
-    fn ease(&self, to: &Self, time: u32, duration: u32, function: EasingFunction) -> Self::Output {
-        let color = &(Color::parse(self)).expect("to be a color").ease(
-            &Color::parse(to).unwrap(),
-            time,
-            duration,
-            function,
-        );
+impl AnimatedValue for AnimColor {
+    fn time(&self) -> Duration {
+        self.time
+    }
+
+    fn as_f32(&self) -> f32 {
+        panic!("This is not a f32.")
+    }
+
+    fn as_string(&self) -> String {
         format!(
             "rgb({}, {}, {}, {})",
-            color.r(),
-            color.g(),
-            color.b(),
-            color.a()
+            self.value.r(),
+            self.value.g(),
+            self.value.b(),
+            self.value.a()
         )
     }
-}
 
-pub struct SegmentCompositor<T: Easable<Output = O> + Clone, O: Clone> {
-    segments: Vec<Segment<T, O>>,
-    total_duration: u32,
-}
-
-struct Segment<T: Easable<Output = O> + Clone, O: Clone> {
-    start: T,
-    end: T,
-    duration: u32,
-    function: EasingFunction,
-}
-
-impl<T: Easable<Output = O> + Clone, O: Clone> SegmentCompositor<T, O> {
-    pub fn new(start: T, end: T, duration: u32, function: EasingFunction) -> Self {
-        let segment = Segment {
-            start: start.clone(),
-            end,
-            duration,
-            function,
-        };
-
-        Self {
-            total_duration: duration,
-            segments: vec![segment],
-        }
-    }
-
-    pub fn add_segment(
-        mut self,
-        start: T,
-        end: T,
-        duration: u32,
-        function: EasingFunction,
-    ) -> Self {
-        let segment = Segment {
-            start,
-            end,
-            duration,
-            function,
-        };
-
-        self.total_duration += duration;
-        self.segments.push(segment);
-        self
-    }
-
-    pub fn add_constant_segment(mut self, value: T, duration: u32) -> Self {
-        let segment = Segment {
-            start: value.clone(),
-            end: value,
-            duration,
-            function: |_time: f32, start: f32, _end: f32, _duration: f32| start,
-        };
-
-        self.total_duration += duration;
-        self.segments.push(segment);
-        self
-    }
-}
-
-impl<T: Easable<Output = O> + Clone, O: Clone> AnimatedValue for SegmentCompositor<T, O> {
-    type Output = O;
-    fn duration(&self) -> Duration {
-        Duration::from_millis(self.total_duration as u64)
-    }
-
-    fn value(&self, index: u32) -> Self::Output {
-        let mut accumulated_time = 0;
-        let mut res = None;
-        for segment in &self.segments {
-            if index > accumulated_time && index <= accumulated_time + segment.duration {
-                let relative_time = index - accumulated_time;
-                res = Some(segment.start.ease(
-                    &segment.end,
-                    relative_time,
-                    segment.duration,
-                    segment.function,
-                ));
-                break;
+    fn prepare(&mut self, direction: AnimDirection) {
+        match direction {
+            AnimDirection::Forward => self.value = self.origin,
+            AnimDirection::Reverse => {
+                self.value = self.destination;
             }
-
-            accumulated_time += segment.duration;
         }
+    }
 
-        res.expect("to be filled in")
+    fn is_finished(&self, index: i32, direction: AnimDirection) -> bool {
+        match direction {
+            AnimDirection::Forward => {
+                index > self.time.as_millis() as i32
+                    && self.value.r() == self.destination.r()
+                    && self.value.g() == self.destination.g()
+                    && self.value.b() == self.destination.b()
+                    && self.value.a() == self.destination.a()
+            }
+            AnimDirection::Reverse => {
+                index > self.time.as_millis() as i32
+                    && self.value.r() == self.origin.r()
+                    && self.value.g() == self.origin.g()
+                    && self.value.b() == self.origin.b()
+                    && self.value.a() == self.origin.a()
+            }
+        }
+    }
+
+    fn advance(&mut self, index: i32, direction: AnimDirection) {
+        if !self.is_finished(index, direction) {
+            let (origin, destination) = match direction {
+                AnimDirection::Forward => (self.origin, self.destination),
+                AnimDirection::Reverse => (self.destination, self.origin),
+            };
+            let r = apply_value(
+                origin.r() as f32,
+                destination.r() as f32,
+                index.min(self.time.as_millis() as i32),
+                self.time,
+                self.ease,
+                self.function,
+            );
+            let g = apply_value(
+                origin.g() as f32,
+                destination.g() as f32,
+                index.min(self.time.as_millis() as i32),
+                self.time,
+                self.ease,
+                self.function,
+            );
+            let b = apply_value(
+                origin.b() as f32,
+                destination.b() as f32,
+                index.min(self.time.as_millis() as i32),
+                self.time,
+                self.ease,
+                self.function,
+            );
+            let a = apply_value(
+                origin.a() as f32,
+                destination.a() as f32,
+                index.min(self.time.as_millis() as i32),
+                self.time,
+                self.ease,
+                self.function,
+            );
+            self.value = Color::from_argb(a as u8, r as u8, g as u8, b as u8);
+        }
+    }
+}
+
+/// Animate a numeric value.
+pub struct AnimNum {
+    origin: f32,
+    destination: f32,
+    time: Duration,
+    ease: Ease,
+    function: Function,
+
+    value: f32,
+}
+
+impl AnimNum {
+    pub fn new(origin: f32, destination: f32) -> Self {
+        Self {
+            origin,
+            destination,
+            time: Duration::default(),
+            ease: Ease::default(),
+            function: Function::default(),
+
+            value: origin,
+        }
+    }
+
+    /// Set the animation duration using milliseconds. Use `Self::duration` if you want to specify the duration in another form.
+    pub fn time(mut self, time: u64) -> Self {
+        self.time = Duration::from_millis(time);
+        self
+    }
+
+    /// Set the animation duration using milliseconds.
+    pub fn duration(mut self, duration: Duration) -> Self {
+        self.time = duration;
+        self
+    }
+
+    /// Set the easing type. See `Ease` for all the types.
+    pub fn ease(mut self, ease: Ease) -> Self {
+        self.ease = ease;
+        self
+    }
+
+    /// Set the easing function. See `Function` for all the types.
+    pub fn function(mut self, function: Function) -> Self {
+        self.function = function;
+        self
+    }
+}
+
+impl AnimatedValue for AnimNum {
+    fn time(&self) -> Duration {
+        self.time
+    }
+
+    fn as_f32(&self) -> f32 {
+        self.value
+    }
+
+    fn as_string(&self) -> String {
+        panic!("This is not a String");
+    }
+
+    fn prepare(&mut self, direction: AnimDirection) {
+        match direction {
+            AnimDirection::Forward => self.value = self.origin,
+            AnimDirection::Reverse => {
+                self.value = self.destination;
+            }
+        }
+    }
+
+    fn is_finished(&self, index: i32, direction: AnimDirection) -> bool {
+        match direction {
+            AnimDirection::Forward => {
+                index > self.time.as_millis() as i32 && self.value >= self.destination
+            }
+            AnimDirection::Reverse => {
+                index > self.time.as_millis() as i32 && self.value <= self.origin
+            }
+        }
+    }
+
+    fn advance(&mut self, index: i32, direction: AnimDirection) {
+        if !self.is_finished(index, direction) {
+            let (origin, destination) = match direction {
+                AnimDirection::Forward => (self.origin, self.destination),
+                AnimDirection::Reverse => (self.destination, self.origin),
+            };
+            self.value = apply_value(
+                origin,
+                destination,
+                index.min(self.time.as_millis() as i32),
+                self.time,
+                self.ease,
+                self.function,
+            )
+        }
     }
 }
 
 pub trait AnimatedValue {
-    type Output;
-    fn duration(&self) -> Duration;
+    fn time(&self) -> Duration;
 
-    fn value(&self, index: u32) -> Self::Output;
+    fn as_f32(&self) -> f32;
+
+    fn as_string(&self) -> String;
+
+    fn prepare(&mut self, direction: AnimDirection);
+
+    fn is_finished(&self, index: i32, direction: AnimDirection) -> bool;
+
+    fn advance(&mut self, index: i32, direction: AnimDirection);
 }
 
-pub fn use_animation(run: impl Fn(ctx: ()) -> impl AnimatedValue) -> () {
-    
+pub type ReadAnimatedValue = ReadOnlySignal<Box<dyn AnimatedValue>>;
+
+#[derive(Default, PartialEq, Clone)]
+pub struct Context {
+    animated_values: Vec<Signal<Box<dyn AnimatedValue>>>,
+    on_finish: OnFinish,
+    auto_start: bool,
 }
 
-// pub type ReadAnimatedValue<O> = ReadOnlySignal<AnimatedValue<Output = O>>;
-//
-// #[derive(Default, PartialEq, Clone)]
-// pub struct Context<A: AnimatedValue<Output = O>, O> {
-//     animated_value: Signal<A>,
-//     on_finish: OnFinish,
-//     auto_start: bool,
-// }
-//
-// impl<A: AnimatedValue<Output = O> + 'static, O> Context<A, O> {
-//     pub fn with(&mut self, animated_value: A) -> ReadAnimatedValue<O> {
-//         let signal = Signal::new(animated_value);
-//         self.animated_value = signal;
-//         ReadOnlySignal::new(signal)
-//     }
-//
-//     pub fn on_finish(&mut self, on_finish: OnFinish) -> &mut Self {
-//         self.on_finish = on_finish;
-//         self
-//     }
-//
-//     pub fn auto_start(&mut self, auto_start: bool) -> &mut Self {
-//         self.auto_start = auto_start;
-//         self
-//     }
-// }
-//
-// /// Controls the direction of the animation.
-// #[derive(Clone, Copy)]
-// pub enum AnimDirection {
-//     Forward,
-//     Reverse,
-// }
-//
-// impl AnimDirection {
-//     pub fn toggle(&mut self) {
-//         match self {
-//             Self::Forward => *self = Self::Reverse,
-//             Self::Reverse => *self = Self::Forward,
-//         }
-//     }
-// }
-//
-// /// What to do once the animation finishes. By default it is [`Stop`](OnFinish::Stop)
-// #[derive(PartialEq, Clone, Copy, Default)]
-// pub enum OnFinish {
-//     #[default]
-//     Stop,
-//     Reverse,
-//     Restart,
-// }
-//
-// /// Animate your elements. Use [`use_animation`] to use this.
-// #[derive(PartialEq, Clone)]
-// pub struct UseAnimator<A: AnimatedValue<Output = O> + 'static, O> {
-//     pub(crate) value_and_ctx: Memo<(A, Context<A, O>)>,
-//     pub(crate) platform: UsePlatform,
-//     pub(crate) is_running: Signal<bool>,
-//     pub(crate) has_run_yet: Signal<bool>,
-//     pub(crate) task: Signal<Option<Task>>,
-//     pub(crate) last_direction: Signal<AnimDirection>,
-// }
-//
-// impl<A: AnimatedValue<Output = O> + 'static, O> Copy for UseAnimator<A, O> {}
-//
-// impl<A: AnimatedValue<Output = O> + 'static, O> UseAnimator<A, O> {
-//     /// Get the animated value.
-//     pub fn get(&self) -> A {
-//         self.value_and_ctx.read().0.clone()
-//     }
-//
-//     /// Reset the animation to the default state.
-//     pub fn reset(&self) {
-//         let mut task = self.task;
-//
-//         if let Some(task) = task.write().take() {
-//             task.cancel();
-//         }
-//
-//         let value = self.value_and_ctx.read().1.animated_value;
-//         let mut value = *value;
-//         value.write().prepare(AnimDirection::Forward);
-//     }
-//
-//     /// Update the animation.
-//     pub fn run_update(&self) {
-//         let mut task = self.task;
-//
-//         if let Some(task) = task.write().take() {
-//             task.cancel();
-//         }
-//
-//         let value = self.value_and_ctx.read().1.animated_value;
-//         let mut value = *value;
-//         let time = value.peek().time().as_millis() as i32;
-//         value.write().advance(time, *self.last_direction.peek());
-//     }
-//
-//     /// Checks if there is any animation running.
-//     pub fn is_running(&self) -> bool {
-//         *self.is_running.read()
-//     }
-//
-//     /// Checks if it has run yet, by subscribing.
-//     pub fn has_run_yet(&self) -> bool {
-//         *self.has_run_yet.read()
-//     }
-//
-//     /// Checks if it has run yet, doesn't subscribe. Useful for when you just mounted your component.
-//     pub fn peek_has_run_yet(&self) -> bool {
-//         *self.has_run_yet.peek()
-//     }
-//
-//     /// Runs the animation in reverse direction.
-//     pub fn reverse(&self) {
-//         self.run(AnimDirection::Reverse)
-//     }
-//
-//     /// Runs the animation normally.
-//     pub fn start(&self) {
-//         self.run(AnimDirection::Forward)
-//     }
-//
-//     /// Run the animation with a given [`AnimDirection`]
-//     pub fn run(&self, mut direction: AnimDirection) {
-//         let ctx = &self.value_and_ctx.peek().1;
-//         let platform = self.platform;
-//         let mut is_running = self.is_running;
-//         let mut ticker = platform.new_ticker();
-//         let mut value = ctx.animated_value;
-//         let mut has_run_yet = self.has_run_yet;
-//         let on_finish = ctx.on_finish;
-//         let mut task = self.task;
-//         let mut last_direction = self.last_direction;
-//
-//         last_direction.set(direction);
-//
-//         // Cancel previous animations
-//         if let Some(task) = task.write().take() {
-//             task.cancel();
-//         }
-//
-//         if !self.peek_has_run_yet() {
-//             *has_run_yet.write() = true;
-//         }
-//         is_running.set(true);
-//
-//         let animation_task = spawn(async move {
-//             platform.request_animation_frame();
-//
-//             let mut index = 0;
-//             let mut prev_frame = Instant::now();
-//
-//             // Prepare the animations with the the proper direction
-//             value.write().prepare(direction);
-//
-//             loop {
-//                 // Wait for the event loop to tick
-//                 ticker.tick().await;
-//                 platform.request_animation_frame();
-//
-//                 index += prev_frame.elapsed().as_millis() as i32;
-//
-//                 let is_finished = value.is_finished(index, direction);
-//
-//                 // Advance the animations
-//                 value.write().advance(index, direction);
-//
-//                 prev_frame = Instant::now();
-//
-//                 if is_finished {
-//                     if OnFinish::Reverse == on_finish {
-//                         // Toggle direction
-//                         direction.toggle();
-//                     }
-//                     match on_finish {
-//                         OnFinish::Restart | OnFinish::Reverse => {
-//                             index = 0;
-//
-//                             // Restart the animation
-//                             value.write().prepare(direction);
-//                         }
-//                         OnFinish::Stop => {
-//                             // Stop if all the animations are finished
-//                             break;
-//                         }
-//                     }
-//                 }
-//             }
-//
-//             is_running.set(false);
-//             task.write().take();
-//         });
-//
-//         // Cancel previous animations
-//         task.write().replace(animation_task);
-//     }
-// }
+impl Context {
+    pub fn with(&mut self, animated_value: impl AnimatedValue + 'static) -> ReadAnimatedValue {
+        let val: Box<dyn AnimatedValue> = Box::new(animated_value);
+        let signal = Signal::new(val);
+        self.animated_values.push(signal);
+        ReadOnlySignal::new(signal)
+    }
 
-// pub fn use_animation<A: AnimatedValue<Output = O> + 'static, O>(
-//     run: impl Fn(&mut Context<A, O>) -> A + Clone + 'static,
-// ) -> UseAnimator<A, O> {
-//     let pltform = use_platform();
-//     let is_running = use_signal(|| false);
-//     let has_run_yet = use_signal(|| false);
-//     let task = use_signal(|| None);
-//     let last_direction = use_signal(|| AnimDirection::Reverse);
-//
-//     let value_and_ctx = use_memo(move || {
-//         let mut ctx = Context::default();
-//         (run(&mut ctx), ctx)
-//     });
-//
-//     let animator = UseAnimator {
-//         value_and_ctx,
-//         platform,
-//         is_running,
-//         has_run_yet,
-//         task,
-//         last_direction,
-//     };
-//
-//     use_hook(move || {
-//         if animator.value_and_ctx.read().1.auto_start {
-//             animator.run(AnimDirection::Forward);
-//         }
-//     });
-//
-//     animator
-// }
+    pub fn on_finish(&mut self, on_finish: OnFinish) -> &mut Self {
+        self.on_finish = on_finish;
+        self
+    }
 
-// pub fn use_animation_with_dependencies<Animated: PartialEq + Clone + 'static, D: Dependency>(
-//     deps: D,
-//     run: impl Fn(&mut Context, D::Out) -> Animated + 'static,
-// ) -> UseAnimator<Animated>
-// where
-//     D::Out: 'static + Clone,
-// {
-//     let platform = use_platform();
-//     let is_running = use_signal(|| false);
-//     let has_run_yet = use_signal(|| false);
-//     let task = use_signal(|| None);
-//     let last_direction = use_signal(|| AnimDirection::Reverse);
-//
-//     let value_and_ctx = use_memo(use_reactive(deps, move |vals| {
-//         let mut ctx = Context::default();
-//         (run(&mut ctx, vals), ctx)
-//     }));
-//
-//     let animator = UseAnimator {
-//         value_and_ctx,
-//         platform,
-//         is_running,
-//         has_run_yet,
-//         task,
-//         last_direction,
-//     };
-//
-//     use_memo(move || {
-//         let _ = value_and_ctx.read();
-//         if *has_run_yet.peek() {
-//             animator.run_update()
-//         }
-//     });
-//
-//     use_hook(move || {
-//         if animator.value_and_ctx.read().1.auto_start {
-//             animator.run(AnimDirection::Forward);
-//         }
-//     });
-//
-//     animator
-// }
+    pub fn auto_start(&mut self, auto_start: bool) -> &mut Self {
+        self.auto_start = auto_start;
+        self
+    }
+}
+
+/// Controls the direction of the animation.
+#[derive(Clone, Copy)]
+pub enum AnimDirection {
+    Forward,
+    Reverse,
+}
+
+impl AnimDirection {
+    pub fn toggle(&mut self) {
+        match self {
+            Self::Forward => *self = Self::Reverse,
+            Self::Reverse => *self = Self::Forward,
+        }
+    }
+}
+
+/// What to do once the animation finishes. By default it is [`Stop`](OnFinish::Stop)
+#[derive(PartialEq, Clone, Copy, Default)]
+pub enum OnFinish {
+    #[default]
+    Stop,
+    Reverse,
+    Restart,
+}
+
+/// Animate your elements. Use [`use_animation`] to use this.
+#[derive(PartialEq, Clone)]
+pub struct UseAnimator<Animated: PartialEq + Clone + 'static> {
+    pub(crate) value_and_ctx: Memo<(Animated, Context)>,
+    pub(crate) platform: UsePlatform,
+    pub(crate) is_running: Signal<bool>,
+    pub(crate) has_run_yet: Signal<bool>,
+    pub(crate) task: Signal<Option<Task>>,
+    pub(crate) last_direction: Signal<AnimDirection>,
+}
+
+impl<T: PartialEq + Clone + 'static> Copy for UseAnimator<T> {}
+
+impl<Animated: PartialEq + Clone + 'static> UseAnimator<Animated> {
+    /// Get the animated value.
+    pub fn get(&self) -> Animated {
+        self.value_and_ctx.read().0.clone()
+    }
+
+    /// Reset the animation to the default state.
+    pub fn reset(&self) {
+        let mut task = self.task;
+
+        if let Some(task) = task.write().take() {
+            task.cancel();
+        }
+
+        for value in &self.value_and_ctx.read().1.animated_values {
+            let mut value = *value;
+            value.write().prepare(AnimDirection::Forward);
+        }
+    }
+
+    /// Update the animation.
+    pub fn run_update(&self) {
+        let mut task = self.task;
+
+        if let Some(task) = task.write().take() {
+            task.cancel();
+        }
+
+        for value in &self.value_and_ctx.read().1.animated_values {
+            let mut value = *value;
+            let time = value.peek().time().as_millis() as i32;
+            value.write().advance(time, *self.last_direction.peek());
+        }
+    }
+
+    /// Checks if there is any animation running.
+    pub fn is_running(&self) -> bool {
+        *self.is_running.read()
+    }
+
+    /// Checks if it has run yet, by subscribing.
+    pub fn has_run_yet(&self) -> bool {
+        *self.has_run_yet.read()
+    }
+
+    /// Checks if it has run yet, doesn't subscribe. Useful for when you just mounted your component.
+    pub fn peek_has_run_yet(&self) -> bool {
+        *self.has_run_yet.peek()
+    }
+
+    /// Runs the animation in reverse direction.
+    pub fn reverse(&self) {
+        self.run(AnimDirection::Reverse)
+    }
+
+    /// Runs the animation normally.
+    pub fn start(&self) {
+        self.run(AnimDirection::Forward)
+    }
+
+    /// Run the animation with a given [`AnimDirection`]
+    pub fn run(&self, mut direction: AnimDirection) {
+        let ctx = &self.value_and_ctx.peek().1;
+        let platform = self.platform;
+        let mut is_running = self.is_running;
+        let mut ticker = platform.new_ticker();
+        let mut values = ctx.animated_values.clone();
+        let mut has_run_yet = self.has_run_yet;
+        let on_finish = ctx.on_finish;
+        let mut task = self.task;
+        let mut last_direction = self.last_direction;
+
+        last_direction.set(direction);
+
+        // Cancel previous animations
+        if let Some(task) = task.write().take() {
+            task.cancel();
+        }
+
+        if !self.peek_has_run_yet() {
+            *has_run_yet.write() = true;
+        }
+        is_running.set(true);
+
+        let animation_task = spawn(async move {
+            platform.request_animation_frame();
+
+            let mut index = 0;
+            let mut prev_frame = Instant::now();
+
+            // Prepare the animations with the the proper direction
+            for value in values.iter_mut() {
+                value.write().prepare(direction);
+            }
+
+            loop {
+                // Wait for the event loop to tick
+                ticker.tick().await;
+                platform.request_animation_frame();
+
+                index += prev_frame.elapsed().as_millis() as i32;
+
+                let is_finished = values
+                    .iter()
+                    .all(|value| value.peek().is_finished(index, direction));
+
+                // Advance the animations
+                for value in values.iter_mut() {
+                    value.write().advance(index, direction);
+                }
+
+                prev_frame = Instant::now();
+
+                if is_finished {
+                    if OnFinish::Reverse == on_finish {
+                        // Toggle direction
+                        direction.toggle();
+                    }
+                    match on_finish {
+                        OnFinish::Restart | OnFinish::Reverse => {
+                            index = 0;
+
+                            // Restart the animation
+                            for value in values.iter_mut() {
+                                value.write().prepare(direction);
+                            }
+                        }
+                        OnFinish::Stop => {
+                            // Stop if all the animations are finished
+                            break;
+                        }
+                    }
+                }
+            }
+
+            is_running.set(false);
+            task.write().take();
+        });
+
+        // Cancel previous animations
+        task.write().replace(animation_task);
+    }
+}
+
+/// Animate your elements easily.
+///
+/// [`use_animation`] takes an callback to initialize the animated values and related configuration.
+///
+/// To animate a group of values at once you can just return a tuple of them.
+/// Currently supports animating numeric values (e.g width, padding, rotation, offsets) or also colors, you need specify the duration,
+/// and optionally an ease function or what type of easing you want as well.
+///
+/// # Example
+///
+/// Here is an example that animates a value from `0.0` to `100.0` in `50` milliseconds.
+///
+/// ```rust, no_run
+/// # use freya::prelude::*;
+/// fn main() {
+///     launch(app);
+/// }
+///
+/// fn app() -> Element {
+///     let animation = use_animation(|ctx| {
+///         ctx.auto_start(true);
+///         ctx.with(AnimNum::new(0., 100.).time(50))
+///     });
+///
+///     let width = animation.get().read().as_f32();
+///
+///     rsx!(rect {
+///         width: "{width}",
+///         height: "100%",
+///         background: "blue"
+///     })
+/// }
+/// ```
+///
+/// You are not limited to just one animation per call, you can have as many as you want.
+///
+/// ```rust,no_run
+/// # use freya::prelude::*;
+/// fn app() -> Element {
+///     let animation = use_animation(|ctx| {
+///         ctx.auto_start(true);
+///         (
+///             ctx.with(AnimNum::new(0., 100.).time(50)),
+///             ctx.with(AnimColor::new("red", "blue").time(50)),
+///         )
+///     });
+///
+///     let (width, color) = animation.get();
+///
+///     rsx!(rect {
+///         width: "{width.read().as_f32()}",
+///         height: "100%",
+///         background: "{color.read().as_string()}"
+///     })
+/// }
+/// ```
+///
+/// You can also tweak what to do once the animation has finished with [`Context::on_finish`].
+///
+/// ```rust,no_run
+/// # use freya::prelude::*;
+/// fn app() -> Element {
+///     let animation = use_animation(|ctx| {
+///         ctx.on_finish(OnFinish::Restart);
+///         (
+///             ctx.with(AnimNum::new(0., 100.).time(50)),
+///             ctx.with(AnimColor::new("red", "blue").time(50)),
+///         )
+///     });
+///
+///     let (width, color) = animation.get();
+///
+///     rsx!(rect {
+///         width: "{width.read().as_f32()}",
+///         height: "100%",
+///         background: "{color.read().as_string()}"
+///     })
+/// }
+/// ```
+pub fn use_animation<Animated: PartialEq + Clone + 'static>(
+    run: impl Fn(&mut Context) -> Animated + Clone + 'static,
+) -> UseAnimator<Animated> {
+    let platform = use_platform();
+    let is_running = use_signal(|| false);
+    let has_run_yet = use_signal(|| false);
+    let task = use_signal(|| None);
+    let last_direction = use_signal(|| AnimDirection::Reverse);
+
+    let value_and_ctx = use_memo(move || {
+        let mut ctx = Context::default();
+        (run(&mut ctx), ctx)
+    });
+
+    let animator = UseAnimator {
+        value_and_ctx,
+        platform,
+        is_running,
+        has_run_yet,
+        task,
+        last_direction,
+    };
+
+    use_hook(move || {
+        if animator.value_and_ctx.read().1.auto_start {
+            animator.run(AnimDirection::Forward);
+        }
+    });
+
+    animator
+}
+
+pub fn use_animation_with_dependencies<Animated: PartialEq + Clone + 'static, D: Dependency>(
+    deps: D,
+    run: impl Fn(&mut Context, D::Out) -> Animated + 'static,
+) -> UseAnimator<Animated>
+where
+    D::Out: 'static + Clone,
+{
+    let platform = use_platform();
+    let is_running = use_signal(|| false);
+    let has_run_yet = use_signal(|| false);
+    let task = use_signal(|| None);
+    let last_direction = use_signal(|| AnimDirection::Reverse);
+
+    let value_and_ctx = use_memo(use_reactive(deps, move |vals| {
+        let mut ctx = Context::default();
+        (run(&mut ctx, vals), ctx)
+    }));
+
+    let animator = UseAnimator {
+        value_and_ctx,
+        platform,
+        is_running,
+        has_run_yet,
+        task,
+        last_direction,
+    };
+
+    use_memo(move || {
+        let _ = value_and_ctx.read();
+        if *has_run_yet.peek() {
+            animator.run_update()
+        }
+    });
+
+    use_hook(move || {
+        if animator.value_and_ctx.read().1.auto_start {
+            animator.run(AnimDirection::Forward);
+        }
+    });
+
+    animator
+}
+
