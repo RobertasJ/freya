@@ -26,7 +26,6 @@ impl Easable for f32 {
 impl Easable for Color {
     type Output = Self;
     fn ease(self, to: Self, time: u32, duration: u32, function: EasingFunction) -> Self::Output {
-        println!("{self:#?}\n\n{to:#?}");
         let hsv1 = self.to_hsv();
         let hsv2 = to.to_hsv();
 
