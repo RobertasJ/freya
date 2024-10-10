@@ -5,6 +5,7 @@ use dioxus_hooks::{use_memo, use_signal};
 use dioxus_signals::{Memo, ReadOnlySignal, Readable, Signal, UnsyncStorage, Writable, Write};
 use freya_engine::prelude::{Color, HSV};
 use freya_node_state::Parse;
+use torin::direction;
 
 use crate::{use_platform, UsePlatform};
 /// ```
@@ -28,7 +29,6 @@ impl Easable for Color {
     fn ease(self, to: Self, time: u32, duration: u32, function: EasingFunction) -> Self::Output {
         let hsv1 = self.to_hsv();
         let hsv2 = to.to_hsv();
-
         let h = function(time as f32, hsv1.h, hsv2.h - hsv1.h, duration as f32);
         let s = function(time as f32, hsv1.s, hsv2.s - hsv1.s, duration as f32);
         let v = function(time as f32, hsv1.v, hsv2.v - hsv1.v, duration as f32);
@@ -273,6 +273,7 @@ impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq
                         anchor =
                             offset_time(last_direction, anchor, offset).expect("to not underflow");
                         offset = Instant::now();
+
                         last_direction = *direction.peek();
                     }
 
@@ -285,6 +286,14 @@ impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq
             let mut x: Write<Option<Task>, UnsyncStorage> = self.task.write();
             x.replace(task);
         }
+    }
+
+    pub fn toggle(&mut self) {
+        let direction = match *self.direction.peek() {
+            Direction::Forward => Direction::Backward,
+            Direction::Backward => Direction::Forward,
+        };
+        self.run(direction);
     }
 
     pub fn value(&self) -> ReadOnlySignal<O> {
