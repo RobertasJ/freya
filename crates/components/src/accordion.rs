@@ -1,8 +1,17 @@
 use dioxus::prelude::*;
-use freya_elements::{elements as dioxus_elements, events::MouseEvent};
+use freya_elements::{
+    elements as dioxus_elements,
+    events::MouseEvent,
+};
 use freya_hooks::{
-    use_animation, use_applied_theme, use_platform, AccordionTheme, AccordionThemeWith, AnimNum,
-    Ease, Function,
+    use_animation,
+    use_applied_theme,
+    use_platform,
+    AccordionTheme,
+    AccordionThemeWith,
+    AnimNum,
+    Ease,
+    Function,
 };
 use winit::window::CursorIcon;
 
@@ -113,9 +122,7 @@ pub struct AccordionSummaryProps {
 /// Intended to use as summary for an [`Accordion`].
 #[allow(non_snake_case)]
 pub fn AccordionSummary(props: AccordionSummaryProps) -> Element {
-    rsx!(
-        {props.children}
-    )
+    rsx!({ props.children })
 }
 
 /// Properties for the [`AccordionBody`] component.

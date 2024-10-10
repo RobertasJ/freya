@@ -1,19 +1,11 @@
-use std::time::Duration;
-use std::time::Instant;
+use std::{fmt::Debug, time::Instant};
 
 use dioxus_core::prelude::{spawn, use_hook, Task};
-use dioxus_hooks::{use_effect, use_memo, use_reactive, use_signal, Dependency};
-use dioxus_signals::UnsyncStorage;
-use dioxus_signals::Write;
-use dioxus_signals::{Memo, ReadOnlySignal, Readable, Signal, Writable};
-use easer::functions::*;
+use dioxus_hooks::{use_memo, use_signal};
+use dioxus_signals::{Memo, ReadOnlySignal, Readable, Signal, UnsyncStorage, Writable, Write};
 use freya_engine::prelude::{Color, HSV};
 use freya_node_state::Parse;
-use std::fmt::Debug;
-use torin::direction;
-use winit::platform;
 
-use crate::Ticker;
 use crate::{use_platform, UsePlatform};
 /// ```
 /// fn(time: f32, start: f32, end: f32, duration: f32) -> f32;
@@ -43,9 +35,7 @@ impl Easable for Color {
         let v = function(time as f32, hsv1.v, hsv2.v - hsv1.v, duration as f32);
 
         let eased = HSV { h, s, v };
-        let color = eased.to_color(255);
-
-        color
+        eased.to_color(255)
     }
 }
 
@@ -154,7 +144,7 @@ impl<T: Easable<Output = O> + Clone, O: Clone> AnimatedValue for SegmentComposit
             accumulated_time += segment.duration;
         }
 
-        res.expect(&format!("to be filled in"))
+        res.expect("to be filled in")
     }
 }
 
@@ -189,7 +179,7 @@ pub enum Direction {
     Backward,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct UseAnimator<
     O: 'static + Clone,
     Animated: AnimatedValue<Output = O> + PartialEq + Clone + 'static,
@@ -200,6 +190,11 @@ pub struct UseAnimator<
     platform: UsePlatform,
     direction: Signal<Direction>,
     value: Signal<O>,
+}
+
+impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq + 'static> Copy
+    for UseAnimator<O, Animated>
+{
 }
 
 impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq + 'static>
@@ -256,14 +251,16 @@ impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq
                     let current_offset_time =
                         offset_time(last_direction, anchor, offset).unwrap_or(0);
 
-                    if current_offset_time == 0 {
+                    if current_offset_time == 0 && *direction.peek() == Direction::Backward {
                         *value.write() = function_and_ctx.read().0.calc(0);
 
                         *is_running.write() = false;
                         break;
                     }
 
-                    if current_offset_time >= function_and_ctx.read().0.duration() {
+                    if current_offset_time >= function_and_ctx.read().0.duration()
+                        && *direction.peek() == Direction::Forward
+                    {
                         *value.write() = function_and_ctx
                             .read()
                             .0
@@ -273,10 +270,7 @@ impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq
                         break;
                     }
 
-                    if !is_running() {}
-
                     if last_direction != *direction.peek() {
-                        println!("direction changed");
                         anchor =
                             offset_time(last_direction, anchor, offset).expect("to not underflow");
                         offset = Instant::now();
@@ -291,8 +285,6 @@ impl<O: 'static + Clone, Animated: AnimatedValue<Output = O> + Clone + PartialEq
 
             let mut x: Write<Option<Task>, UnsyncStorage> = self.task.write();
             x.replace(task);
-
-            return;
         }
     }
 
@@ -327,21 +319,22 @@ pub fn use_animation<
         function_and_ctx.read().0.calc(time)
     });
 
+    let mut animator = UseAnimator {
+        function_and_ctx,
+        is_running,
+        direction,
+        platform,
+        task,
+        value,
+    };
+
     use_hook(move || {
-        let mut animator = UseAnimator {
-            function_and_ctx,
-            is_running,
-            direction,
-            platform,
-            task,
-            value,
-        };
         let ctx = animator.function_and_ctx.read().1;
 
         if ctx.auto_start {
             animator.run(ctx.starting_direction);
         }
+    });
 
-        animator
-    })
+    animator
 }
