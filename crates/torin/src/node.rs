@@ -6,6 +6,7 @@ use crate::{
     gaps::Gaps,
     geometry::Length,
     prelude::{
+        AspectRatio,
         Content,
         Position,
         VisibleSize,
@@ -61,6 +62,9 @@ pub struct Node {
     pub contains_text: bool,
 
     pub spacing: Length,
+
+    /// the aspect ratio of the node
+    pub aspect_ratio: AspectRatio,
 }
 
 impl Scaled for Node {
